@@ -21,7 +21,13 @@ let stock = { "chaussures": 10, "sacs": 5, "robes": 8 };
 async function startBot() {
   const { state, saveCreds } = await useMultiFileAuthState('auth_info_baileys');
   const sock = makeWASocket({ auth: state, logger: P({ level: 'silent' }) });
-  sock.ev.on('creds.update', saveCreds);
+  sock.ev.on('creds.update', saveCreds);// ajoute juste ces 2 lignes dans le messages.upsert pour voir
+sock.ev.on('messages.upsert', async m => {
+  const msg = m.messages[0];
+  console.log("NOUVEAU MESSAGE RECU:", JSON.stringify(msg, null, 2)); // <--- AJOUTE ÇA
+  if(!msg.message || msg.key.fromMe) return;
+  // ... reste du code
+});
   
   sock.ev.on('connection.update', async (update) => {
     const { connection, lastDisconnect, qr } = update;
