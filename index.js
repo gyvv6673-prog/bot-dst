@@ -1,51 +1,39 @@
 const { default: makeWASocket, useMultiFileAuthState, DisconnectReason } = require('@whiskeysockets/baileys');
 const P = require('pino');
 const express = require('express');
+const QRCode = require('qrcode');
 
 const app = express();
-app.get('/', (req,res) => res.send('BOT DTS EN LIGNE'));
+let latestQR = null;
+
+app.get('/', (req,res) => {
+  if(latestQR) {
+    res.send(`<h1>Scanne ce QR avec 771269905</h1><img src="${latestQR}" style="width:300px"><br><a href="/">Rafraichir</a><br>Ensuite va dans WhatsApp > Appareils liés > Lier un appareil`);
+  } else {
+    res.send('BOT DTS en ligne - QR en cours de generation... Rafraichis dans 10s <br><a href="/">Rafraichir</a>');
+  }
+});
+
 app.listen(process.env.PORT || 10000, () => console.log('Serveur web OK'));
 
 let stock = { "chaussures": 10, "sacs": 5, "robes": 8 };
 
 async function startBot() {
   const { state, saveCreds } = await useMultiFileAuthState('auth_info_baileys');
-  
-  const sock = makeWASocket({
-    auth: state,
-    logger: P({ level: 'silent' }),
-    browser: ["Ubuntu", "Chrome", "20.0.04"]
-  });
-
+  const sock = makeWASocket({ auth: state, logger: P({ level: 'silent' }) });
   sock.ev.on('creds.update', saveCreds);
-
-  if (!sock.authState.creds.registered) {
-    setTimeout(async () => {
-      // ESSAIE SANS 221 d'abord pour Orange Sénégal
-      const numbersToTry = ["771269905", "221771269905"];
-      for (let num of numbersToTry) {
-        try {
-          console.log(`Tentative avec numero: ${num}`);
-          let code = await sock.requestPairingCode(num);
-          console.log("================================");
-          console.log(`CODE POUR ${num}: ${code}`);
-          console.log("================================");
-          console.log("WhatsApp > Appareils lies > Lier avec numero");
-          break; // stop si ca marche
-        } catch(e) {
-          console.log(`Echec avec ${num}:`, e.message);
-        }
-      }
-    }, 5000);
-  }
-
+  
   sock.ev.on('connection.update', async (update) => {
-    const { connection, lastDisconnect } = update;
+    const { connection, lastDisconnect, qr } = update;
+    if(qr) {
+      latestQR = await QRCode.toDataURL(qr);
+      console.log('Nouveau QR genere - va sur https://bot-dst.onrender.com');
+    }
     if(connection === 'close') {
-      console.log("Connexion fermee", lastDisconnect?.error);
       if(lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut) startBot();
     } else if(connection === 'open') {
       console.log('✅ CONNECTE 771269905');
+      latestQR = null;
     }
   });
 
@@ -55,7 +43,7 @@ async function startBot() {
     const from = msg.key.remoteJid;
     const text = (msg.message.conversation || msg.message.extendedTextMessage?.text || '').toLowerCase().trim();
     if(text === 'stock') {
-      let rep = '*STOCK DTS*\n'; for(let k in stock) rep+= `- ${k}: ${stock[k]}\n`;
+      let rep = '*STOCK DTS - 771269905*\n\n'; for(let k in stock) rep+=`- ${k}: ${stock[k]}\n`;
       await sock.sendMessage(from, { text: rep });
     }
   });
